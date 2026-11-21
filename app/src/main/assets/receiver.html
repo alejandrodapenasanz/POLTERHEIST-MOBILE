@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POLTERHEIST · TV</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050706;color:#eef3e9;font:22px Arial,sans-serif;overflow:hidden}
+#image,#video{display:none;width:100vw;height:100vh;object-fit:contain;background:#000}
+#message{position:absolute;inset:35% 8%;text-align:center;line-height:1.6}strong{color:#c5f277;letter-spacing:5px}
+#tools{position:fixed;right:24px;bottom:24px;opacity:.8}button{font:18px Arial;background:#c5f277;color:#101412;border:0;border-radius:12px;padding:14px 20px;margin:5px;cursor:pointer}
+#hint{font-size:17px;color:#aeb8a9}button:focus{outline:4px solid white}
+</style></head><body>
+<img id="image" alt="Imagen compartida"><video id="video" playsinline muted controls></video>
+<div id="message"><strong>POLTERHEIST</strong><p id="status">Conectando con tu móvil…</p><p id="hint">Mantén ambos dispositivos en la misma red.</p></div>
+<div id="tools"><button id="sound" style="display:none">Activar sonido / reproducir</button><button id="full">Pantalla completa</button></div>
+<script>
+(function(){
+  var image=document.getElementById('image'),video=document.getElementById('video'),message=document.getElementById('message');
+  var status=document.getElementById('status'),sound=document.getElementById('sound'),url='',lastCommand='',failures=0;
+  function play(){var p=video.play();if(p&&p.catch)p.catch(function(){status.textContent='Pulsa reproducir con el mando de la TV.';message.style.display='block';});}
+  sound.onclick=function(){video.muted=false;play();};
+  video.onplaying=function(){message.style.display='none';};
+  video.onerror=function(){status.textContent='La TV no puede reproducir este vídeo. Prueba MP4 con H.264 y AAC.';message.style.display='block';};
+  image.onerror=function(){status.textContent='No se ha podido cargar la imagen.';message.style.display='block';};
+  document.getElementById('full').onclick=function(){var el=document.documentElement;var f=el.requestFullscreen||el.webkitRequestFullscreen;if(f)f.call(el);};
+  function apply(s){
+    if(s.command==='stop'){video.pause();video.removeAttribute('src');video.load();image.removeAttribute('src');image.style.display=video.style.display=sound.style.display='none';message.style.display='block';status.textContent='Emisión detenida desde el móvil.';url='';lastCommand='stop';return;}
+    var changed=url!==s.url;
+    if(changed){url=s.url;video.pause();video.removeAttribute('src');video.load();image.style.display=video.style.display='none';message.style.display='none';
+      if(s.image){image.src=s.url;image.style.display='block';sound.style.display='none';}
+      else{video.src=s.url;video.style.display='block';sound.style.display='inline-block';}}
+    video.loop=!!s.loop;
+    if(!s.image&&(changed||lastCommand!==s.command)){if(s.command==='pause')video.pause();else play();}
+    lastCommand=s.command;
+  }
+  function poll(){var xhr=new XMLHttpRequest();xhr.open('GET','__STATE_PATH__',true);xhr.timeout=4000;
+    xhr.onload=function(){try{if(xhr.status!==200)throw new Error();var s=JSON.parse(xhr.responseText);if(failures){url='';}failures=0;apply(s);}catch(e){lost();}setTimeout(poll,1000);};
+    xhr.onerror=xhr.ontimeout=function(){lost();setTimeout(poll,2000);};xhr.send();}
+  function lost(){failures++;if(failures>=3){video.pause();image.style.display=video.style.display='none';status.textContent='Se ha cerrado la emisión o se ha perdido la conexión con el móvil.';message.style.display='block';}}
+  poll();
+})();
+</script></body></html>

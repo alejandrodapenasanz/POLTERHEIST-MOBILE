@@ -72,7 +72,8 @@ public final class BluetoothTvDiscovery {
         for (BluetoothDevice device : adapter.getBondedDevices()) consider(device, safeName(device), device.getBluetoothClass(), "Bluetooth · emparejada");
         if (!registered) {
             IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
-            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+            // Bluetooth broadcasts originate from a privileged process with its own UID.
+            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED);
             registered = true;
         }
         try { adapter.startDiscovery(); } catch (SecurityException ignored) { }

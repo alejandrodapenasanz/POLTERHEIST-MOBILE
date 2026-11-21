@@ -1,18 +1,36 @@
 # POLTERHEIST Mobile
 
-Primera app Android de POLTERHEIST para mostrar una imagen o un vídeo del móvil en una TV. Aplicación nativa Java, Android 8.0 o superior, interfaz en español. No necesita el PC durante el uso.
+App Android de POLTERHEIST para descubrir y controlar dispositivos de tu entorno. La pantalla de inicio separa **TVs y red local** (imagen/vídeo) de **Bluetooth y audio** (altavoces, auriculares y accesorios cercanos). Aplicación nativa Java, Android 8.0 o superior, interfaz en español. No necesita el PC durante el uso.
 
 ## Instalar y usar
 
-La compilación de desarrollo está en `artifacts/POLTERHEIST-Mobile-0.1.0-debug.apk` cuando se ha ejecutado el empaquetado local. La salida original de Gradle es `app/build/outputs/apk/debug/app-debug.apk`.
+La compilación de desarrollo está en `artifacts/POLTERHEIST-Mobile-0.2.0-debug.apk` cuando se ha ejecutado el empaquetado local. La salida original de Gradle es `app/build/outputs/apk/debug/app-debug.apk`.
 
 1. Copia la APK al móvil, ábrela y permite instalar desde esa aplicación cuando Android lo solicite. Es una APK de desarrollo firmada con la clave debug, no una publicación de Play Store.
 2. Lo más sencillo es conectar el móvil y la TV a la misma red local (la TV puede usar Ethernet). Si no es posible, mira [Detectar TVs fuera de tu red](#detectar-tvs-fuera-de-tu-red).
-3. Abre POLTERHEIST y elige una imagen o un vídeo con el selector de Android.
+3. Abre POLTERHEIST → **Abrir TVs y red** y elige una imagen o un vídeo con el selector de Android.
 4. Pulsa **Buscar TVs**, selecciona un receptor y pulsa **Enviar a la TV**. En Cast, espera a que la conexión termine. Acepta en la TV cualquier solicitud que muestre su sistema.
 5. Usa **Pausar**, **Reanudar** y **Detener**, o detén el envío desde la notificación.
 
 La búsqueda no inicia reproducción. Seleccionar Cast abre su aplicación receptora; el archivo se carga al pulsar Enviar. Se controla **una TV por sesión**. Para cambiar de TV o archivo, detén primero la emisión.
+
+## Bluetooth y audio (0.2.0)
+
+1. Entra en **Abrir Bluetooth** y pulsa **Buscar Bluetooth**. Concede el permiso de dispositivos cercanos (ubicación y servicio de Ubicación en Android 8–11).
+2. Pon el altavoz o auriculares en modo de emparejamiento. Tócalos en la lista, pulsa **Emparejar** y acepta la solicitud de Android.
+3. Si todavía no aparecen en **Salida de audio**, pulsa **Conectar audio en ajustes**, selecciona el accesorio y activa audio multimedia. Vuelve a POLTERHEIST.
+4. Elige la salida conectada, pulsa **Elegir archivo de audio** y después **Reproducir**.
+5. Puedes pausar, reanudar, avanzar, repetir o detener. Los botones físicos controlan el volumen multimedia. La notificación y los controles multimedia del sistema permiten pausar/reanudar/detener al salir de la app.
+
+Se buscan dispositivos Classic durante unos 13 segundos y después anuncios BLE durante 8 segundos, con un máximo de 128 entradas. Los emparejados se muestran también aunque estén apagados. La búsqueda termina al salir de la pantalla y no arranca reproducción. La lista de salidas contiene únicamente dispositivos de audio que Android comunica como conectados; **emparejado no significa conectado para audio**.
+
+Se utiliza A2DP o LE Audio cuando el sistema expone una salida compatible; también se admiten salidas de audífonos expuestas por Android. Los formatos del archivo (MP3, M4A/AAC, WAV, Ogg, FLAC…) los decodifica el móvil; Android negocia el códec Bluetooth. La copia privada tiene un límite de 512 MiB, y se puede cancelar la importación. No se solicitan permisos generales para leer la biblioteca ni acceso al micrófono.
+
+En Android 9+ el reproductor solicita la salida elegida, comienza silenciado y consulta su ruta real antes de habilitar sonido. Pausa si detecta una desconexión, cambio de ruta, llamada o pérdida del foco de audio. En Android 8 se usa la salida A2DP del sistema sin verificación de ruta; la interfaz lo indica. Tras cinco minutos en pausa se libera la sesión. No se reanuda automáticamente al reconectar ni después de terminar el proceso.
+
+**Límites:** detectar BLE no demuestra soporte de audio ni permite controlar cualquier IoT. Los accesorios BLE sin perfil multimedia aparecen para identificación/emparejamiento; sus controles específicos quedan para futuras integraciones. No se implementa audio por GATT, HFP/SCO para música, conexión forzada mediante APIs ocultas, emisión Auracast ni selección simultánea de varios altavoces. La conexión multimedia puede requerir los ajustes del sistema. `neverForLocation` puede filtrar algunos beacons BLE.
+
+La investigación, decisiones de implementación y fuentes oficiales están en [Bluetooth y audio en Android](docs/bluetooth-audio.md). **Esta entrega se ha compilado, pero no se han ejecutado pruebas de Bluetooth, tests ni instalaciones en el teléfono.**
 
 ## Vías de conexión reales
 
@@ -48,7 +66,7 @@ El vídeo arranca silenciado por las restricciones de autoplay del navegador. Us
 
 ## Archivos y red
 
-- El selector solo concede acceso al archivo elegido; no se solicita acceso general a tu galería. Los permisos de dispositivos cercanos (Wi-Fi Direct/Bluetooth; ubicación en Android 8–12) se piden solo para buscar fuera de tu red y son opcionales. Se prepara una copia temporal privada en el móvil.
+- El selector solo concede acceso al archivo elegido; no se solicita acceso general a tu galería. Se piden permisos de dispositivos cercanos para Bluetooth y Wi-Fi Direct. Bluetooth solo necesita ubicación en Android 8–11; Wi-Fi Direct/hotspot la necesitan hasta Android 12. Se prepara una copia temporal privada en el móvil.
 - Imágenes: hasta 50 MiB y 100 megapíxeles de entrada, normalizadas a JPEG, orientación EXIF, transparencia sobre negro y lado máximo 1920 px. Los formatos de entrada dependen del decodificador de Android.
 - Para Cast, una imagen se convierte localmente en un clip H.264 de 1280×720, dos segundos, repetido. Requiere un codificador H.264 con entrada YUV flexible; si no está disponible se indica el error y se puede elegir otra vía. El comportamiento de la transición del bucle depende del receptor.
 - Vídeos: hasta 1 GiB, con pista de vídeo reconocida por Android. **No hay transcodificación automática de vídeos**. MP4/H.264/AAC es la opción de mayor compatibilidad habitual. HEVC, MKV, HDR, resoluciones altas y otros formatos dependen del televisor.
@@ -69,6 +87,9 @@ Herramientas: JDK 17, Android SDK Platform 35, Build Tools 35.0.0. Gradle 8.11.1
 En Android Studio abre esta carpeta, instala el SDK indicado y ejecuta `app`. En terminal, configura `JAVA_HOME` y `ANDROID_HOME` o `local.properties`:
 
 ```powershell
+# Solo compilar y empaquetar, SIN tests ni lint:
+.\scripts\package.ps1 -SkipTests
+# Compilar con las comprobaciones habituales (cuando se autoricen):
 .\gradlew.bat assembleDebug testDebugUnitTest lintDebug
 # En esta máquina, detecta también el JDK local de POLTERHEIST:
 .\scripts\build.ps1
@@ -84,9 +105,11 @@ En Linux/macOS se puede usar `sh gradlew assembleDebug testDebugUnitTest lintDeb
 
 ## Validación
 
+**Entrega 0.2.0:** `assembleDebug` completado. Por indicación del usuario, no se ejecutaron tests, lint, pruebas funcionales ni instalaciones. El commit de esta entrega usa `[skip ci]` para no activar las pruebas de GitHub Actions. Las comprobaciones descritas abajo son instrucciones pendientes, no resultados de esta versión.
+
 `testDebugUnitTest` cubre rangos HTTP, descarga/HEAD, revocación de enlaces, cierre, controles del navegador, escape de nombres, parser XML, bloqueo de entidades/referencias a otro host y secuencia real HTTP/SOAP contra un simulador DLNA local. Robolectric comprueba el arranque sin Google Play Services y la conservación del destino al recrear la Activity. `lintDebug` revisa compatibilidad Android y manifiesto.
 
-Estos tests **no sustituyen pruebas con móviles y televisores reales**. No se han validado físicamente Cast, el codificador MediaCodec, descubrimiento Wi-Fi, reproducción DLNA, TV browsers ni ejecución prolongada con el móvil bloqueado en esta entrega.
+Estos tests **no sustituyen pruebas con móviles y televisores reales**. En sesiones anteriores se comprobó el codificador H.264 y el servidor/receptor local en el Redmi; Cast llegó a devolver `PLAYING`, pero el usuario no vio la imagen en la TV. La visualización en la TV sigue sin confirmarse. Esos resultados no validan los cambios de descubrimiento ni el nuevo audio Bluetooth de esta entrega.
 
 `node scripts/test-receiver.cjs` ejecuta el JavaScript real del receptor en un pequeño entorno simulado y comprueba carga, pausa/reanudación, repetición, imagen, parada y pérdida/recuperación de conexión. No es una prueba del motor de un navegador de TV.
 
@@ -105,6 +128,8 @@ Para validar en casa: prueba primero JPEG y un MP4 H.264/AAC pequeño, verifica 
 ## Organización y referencias
 
 `AppController` mantiene estado y coordina las sesiones; `ShareService` gestiona ejecución en primer plano; `CastController` integra el SDK oficial; `SsdpDiscovery`, `DlnaClient` y `UpnpXml` implementan descubrimiento/control; `MediaHttpServer` sirve exclusivamente el contenido seleccionado; `MediaImporter` y `ImageClipEncoder` lo preparan. `MainActivity` contiene la interfaz nativa y `assets/receiver.html` el receptor de navegador.
+
+`HomeActivity` es el inicio de dispositivos; `BluetoothAudioActivity` presenta descubrimiento, emparejamiento, salidas y reproducción. `BluetoothDiscovery` hace inquiry/anuncios sin conectar GATT. `AudioFile` copia y valida el documento; `AudioController` coordina reproducción, foco y ruta; `AudioPlaybackService` mantiene el servicio `mediaPlayback`, `MediaSession` y notificación. `DeviceUi` comparte los componentes visuales nativos de las pantallas nuevas.
 
 Se ha revisado `C:\dev\POLTERHEIST\tv_control`, especialmente sus adaptadores Cast/DLNA y el servidor multimedia. Esta app adapta el enfoque a APIs nativas Android; no ejecuta Python ni herramientas de auditoría de redes.
 

@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Discovery outside the local network: Wi-Fi Direct, phone hotspot (LocalOnlyHotspot) and Bluetooth. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -34,14 +36,18 @@
         android:usesCleartextTraffic="true">
         <meta-data android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="org.polterheist.mobile.CastOptionsProvider" />
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".HomeActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".MainActivity" android:exported="false" />
+        <activity android:name=".BluetoothAudioActivity" android:exported="false" />
         <activity android:name=".PreviewActivity" android:exported="false" />
         <service android:name=".ShareService" android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+        <service android:name=".AudioPlaybackService" android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>

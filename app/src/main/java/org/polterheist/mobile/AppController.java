@@ -184,7 +184,9 @@ public final class AppController {
     private void startNearbyScan(int scan, boolean lan) {
         if (lan) mdns.start((name, type, host) -> onMdns(scan, name, type, host), 8000);
         if (wifiDirect.available() && NearbyPermissions.wifi(context)) wifiDirect.discover();
-        if (bluetooth.available() && NearbyPermissions.bluetoothScan(context) && NearbyPermissions.bluetoothConnect(context)) {
+        boolean playingAudio = context.getApplicationContext() instanceof PolterApp
+                && ((PolterApp) context.getApplicationContext()).audioActive();
+        if (!playingAudio && bluetooth.available() && NearbyPermissions.bluetoothScan(context) && NearbyPermissions.bluetoothConnect(context)) {
             nearbyScanning = true;
             bluetooth.start(new BluetoothTvDiscovery.Listener() {
                 @Override public void found(BluetoothDevice device, String name, String detail) {

@@ -46,10 +46,10 @@ public final class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String[]> picker = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
         if (uri != null) app.importMedia(uri);
     });
+    private Runnable pendingNearby;
     private final ActivityResultLauncher<String[]> nearbyPermission = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), granted -> {
         if (pendingNearby != null) { Runnable next = pendingNearby; pendingNearby = null; next.run(); }
     });
-    private Runnable pendingNearby;
     private final ActivityResultLauncher<String> notificationPermission = registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> app.send());
 
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -64,6 +64,7 @@ public final class MainActivity extends AppCompatActivity {
     }
     @Override protected void onStop() {
         app.removeListener(listener); timer.removeCallbacks(viewerTick);
+        if (app.bluetooth != null) app.bluetooth.stop();
         super.onStop();
     }
 
@@ -83,6 +84,10 @@ public final class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams wordLayout = new LinearLayout.LayoutParams(0, -2, 1); wordLayout.leftMargin=dp(12); brand.addView(wordmark, wordLayout);
         TextView version = text("MOBILE / 01", 10, MUTED); version.setLetterSpacing(.05f); brand.addView(version);
         body.addView(brand);
+        margin(body, button("Inicio · todos los dispositivos", false, () -> {
+            startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
+            finish();
+        }), 12);
         TextView heading = text("Tu contenido.\nEn tu pantalla.", 34, TEXT); heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD); heading.setLineSpacing(0, 1.02f); margin(body, heading, 28);
         TextView intro = text("Elige algo, conecta tu TV y dale al play.", 15, MUTED); margin(body, intro, 12);
         network = text("", 13, ACCENT); network.setPadding(dp(12),dp(9),dp(12),dp(9)); network.setBackground(shape(Color.rgb(33,46,30), 12, 0)); margin(body,network,18);

@@ -7,7 +7,7 @@ Actualízalo al terminar cada tarea: mueve lo hecho a "Hecho" y deja claro qué 
 
 ## Contexto rápido
 
-- App Android nativa en Java (minSdk 26, targetSdk 35), UI construida por código en `MainActivity` (sin XML de layouts).
+- App Android nativa en Java (minSdk 26, targetSdk 35), UI construida por código. `HomeActivity` es el launcher; `MainActivity` mantiene TVs y `BluetoothAudioActivity` gestiona audio/accesorios.
 - Vías de envío: Google Cast (`CastController`), DLNA/UPnP (`SsdpDiscovery`, `DlnaClient`, `UpnpXml`), navegador de la TV (`MediaHttpServer` + `assets/receiver.html`).
 - `AppController` = estado global y coordinación. `ShareService` = servicio en primer plano durante el envío.
 - El móvil sirve el archivo por HTTP en una IP local concreta (`LocalNetwork.address`): la TV tiene que poder llegar a esa IP.
@@ -20,7 +20,28 @@ Actualízalo al terminar cada tarea: mueve lo hecho a "Hecho" y deja claro qué 
 > (Bluetooth o CUALQUIER método disponible desde un móvil), quiero que se detecte y se pueda conectar."
 
 Restricción del usuario: **no ejecutar pruebas; solo programar.** El usuario hará las pruebas funcionales.
-Nada de lo de abajo se ha compilado ni probado (no hay Android SDK en la máquina donde se programó).
+La tarea 1 se escribió originalmente sin SDK. En la tarea 2 se incorporó el commit remoto `0c987c5`, se corrigió la referencia adelantada de `pendingNearby` en `MainActivity` y se compiló el conjunto. No se ejecutaron tests ni pruebas funcionales.
+
+## Hecho (tarea 2 — hub IoT y audio Bluetooth, 21/11/2026)
+
+- Inicio con **TVs y red local** / **Bluetooth y audio**, manteniendo las funciones existentes de TV.
+- `BluetoothDiscovery`: emparejados, inquiry Classic seguido de BLE, límite de tiempo y 128 entradas; cancelación al salir, permisos por versión, encendido mediante diálogo de Android y emparejamiento `createBond` con sus estados.
+- Separación entre accesorio detectado/emparejado y salida multimedia conectada. Botón de ajustes Bluetooth para completar conexión de perfil con APIs públicas. No se implementa GATT para audio ni conexión A2DP mediante reflexión.
+- `AudioFile`: SAF, copia privada cancelable y acotada a 512 MiB, comprobación de pista de audio, retirada de temporales.
+- `AudioController`: selección de salida A2DP/LE Audio/audífono, reproducir/pausar/reanudar/detener/seek/bucle, foco, pausa por desconexión y cambio de ruta. En API 28+ arranca silenciado y verifica la ruta antes de habilitar sonido; API 26/27 usa la ruta A2DP del sistema y avisa de su limitación.
+- `AudioPlaybackService`: `mediaPlayback`, sesión multimedia, notificación y botones del accesorio, ejecución con pantalla bloqueada, liberación al detener o tras cinco minutos en pausa, sin reinicio automático.
+- Recepción de broadcasts Bluetooth desde el UID privilegiado corregida también en `BluetoothTvDiscovery`. La búsqueda de TVs omite inquiry Bluetooth mientras el audio está activo.
+- Investigación y decisiones: [docs/bluetooth-audio.md](docs/bluetooth-audio.md), con fuentes Android/Bluetooth SIG y límites de LE Audio/Auracast.
+- Versión 0.2.0 (versionCode 2). `scripts/package.ps1 -SkipTests` compila/empaqueta sin tests ni lint y toma la versión de los metadatos de Gradle.
+- **Solo compilación/empaquetado. Sin tests, lint, instalaciones ni reproducción en el teléfono.** Push con `[skip ci]` para omitir GitHub Actions.
+
+### Pendiente de la tarea 2
+
+- Validación manual y regresiones descritas en `docs/bluetooth-audio.md`, cuando el usuario reanude las pruebas.
+- La reproducción visual anterior en `tv-coneja` sigue sin confirmar: el receptor devolvió `PLAYING`, pero el usuario indicó que no veía la imagen.
+- Las salidas LE Audio están implementadas según las APIs, sin validación física todavía. No prometer compatibilidad universal ni controles para sensores BLE sin implementar su protocolo.
+- No se ha creado transmisor Auracast, control de varios altavoces, biblioteca/playlist ni asociación Companion Device para APIs posteriores al SDK 35.
+- CI preexistente fallaba al instalar herramientas SDK (`setup-android`); no se ha reejecutado por la instrucción de no hacer pruebas.
 
 ---
 
@@ -59,7 +80,8 @@ Nada de lo de abajo se ha compilado ni probado (no hay Android SDK en la máquin
 ## Pendiente — debe probarse (por el usuario, en dispositivos reales)
 
 ### 0. Compilación (primero)
-- [ ] `.\gradlew.bat assembleDebug testDebugUnitTest lintDebug` (o `scripts\build.ps1`). Se programó sin compilar: corregir errores de compilación/lint si aparecen.
+- [x] `assembleDebug` del conjunto y empaquetado 0.2.0. Corregida referencia adelantada de `pendingNearby`.
+- [ ] `testDebugUnitTest`, `lintDebug`, tests de navegador y pruebas físicas: pendientes por instrucción del usuario.
   - Puntos con más riesgo: APIs `WifiP2pWfdInfo` (API 30), `SoftApConfiguration`, `ContextCompat.registerReceiver`, lint `MissingPermission` (suprimido a nivel de clase en `WifiDirectController`, `BluetoothTvDiscovery`, `HotspotController`).
 - [ ] `ActivitySmokeTest` (Robolectric) sigue pasando con los nuevos controladores creados en el constructor de `AppController`.
 

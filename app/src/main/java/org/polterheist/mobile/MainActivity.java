@@ -25,7 +25,8 @@ public final class MainActivity extends AppCompatActivity {
             TEXT = Color.rgb(239,244,233), MUTED = Color.rgb(161,174,161), ACCENT = Color.rgb(197,242,119);
     private AppController app;
     private LinearLayout devices, body;
-    private TextView network, fileName, fileDetails, scanNote, state, destination, browserAddress, viewerState, count;
+    private TextView network, fileName, fileDetails, scanNote, state, destination, browserAddress, viewerState, count, p2pState, hotspotState;
+    private Button p2pDisconnect, hotspotButton;
     private ImageView thumbnail;
     private Button pick, search, send, pause, stop, preview, browser;
     private CheckBox repeat;
@@ -45,6 +46,10 @@ public final class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String[]> picker = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
         if (uri != null) app.importMedia(uri);
     });
+    private final ActivityResultLauncher<String[]> nearbyPermission = registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), granted -> {
+        if (pendingNearby != null) { Runnable next = pendingNearby; pendingNearby = null; next.run(); }
+    });
+    private Runnable pendingNearby;
     private final ActivityResultLauncher<String> notificationPermission = registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> app.send());
 
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -93,12 +98,14 @@ public final class MainActivity extends AppCompatActivity {
 
         LinearLayout tvCard = card("02", "Conecta tu TV");
         LinearLayout searchRow = row();
-        count = text("En tu red", 14, MUTED); searchRow.addView(count, new LinearLayout.LayoutParams(0,-2,1));
-        search = button("Buscar TVs", false, () -> app.scan(null)); searchRow.addView(search);
+        count = text("Cerca de ti", 14, MUTED); searchRow.addView(count, new LinearLayout.LayoutParams(0,-2,1));
+        search = button("Buscar TVs", false, () -> withNearby(false, () -> app.scan(null))); searchRow.addView(search);
         margin(tvCard,searchRow,14);
         devices = column(); margin(tvCard,devices,10);
         scanNote = text("", 12, MUTED); margin(tvCard,scanNote,12);
-        Button manual = button("Buscar DLNA por IP", false, this::manualIp); margin(tvCard,manual,8);
+        Button manual = button("Buscar por IP o en otra red", false, this::manualIp); margin(tvCard,manual,8);
+        p2pState = text("", 13, ACCENT); margin(tvCard,p2pState,12);
+        p2pDisconnect = button("Desconectar Wi-Fi Direct", false, app::disconnectWifiDirect); margin(tvCard,p2pDisconnect,6);
 
         LinearLayout controls = card("03", "Listo para emitir");
         destination = text("", 16, TEXT); destination.setTypeface(Typeface.DEFAULT,Typeface.BOLD); margin(controls,destination,16);
@@ -121,11 +128,13 @@ public final class MainActivity extends AppCompatActivity {
         }); margin(browserPanel,copy,8); controls.addView(browserPanel);
 
         LinearLayout alternatives = card("+", "Otras formas de conectar");
-        TextView explanation = text("Si tu TV no aparece, prueba su navegador o las opciones de duplicación de tu móvil.", 14, MUTED); margin(alternatives,explanation,14);
+        TextView explanation = text("Si tu TV no aparece, crea una red desde el móvil, prueba su navegador o las opciones de duplicación de tu móvil.", 14, MUTED); margin(alternatives,explanation,14);
         browser = button("Usar el navegador de la TV", false, app::chooseBrowser); margin(alternatives,browser,12);
+        hotspotButton = button("Crear red del móvil para la TV", false, this::hotspot); margin(alternatives,hotspotButton,6);
+        hotspotState = text("", 15, ACCENT); hotspotState.setTypeface(Typeface.MONOSPACE); hotspotState.setTextIsSelectable(true); margin(alternatives,hotspotState,8);
         margin(alternatives,button("Abrir duplicación de pantalla", false, this::mirroring),6);
         margin(alternatives,button("Compatibilidad y ayuda", false, this::help),6);
-        TextView footer = text("HECHO PARA TU RED, DESDE TU MÓVIL\nMantén el móvil conectado durante la emisión.", 11, MUTED); footer.setGravity(Gravity.CENTER); footer.setLineSpacing(dp(7),1); margin(body,footer,24);
+        TextView footer = text("TU RED, OTRA RED O SIN RED, DESDE TU MÓVIL\nMantén el móvil conectado durante la emisión.", 11, MUTED); footer.setGravity(Gravity.CENTER); footer.setLineSpacing(dp(7),1); margin(body,footer,24);
     }
 
     private void render() {
@@ -159,19 +168,28 @@ public final class MainActivity extends AppCompatActivity {
         browserPanel.setVisibility(app.sharing && app.target == AppController.Target.BROWSER && !app.viewerUrl().isEmpty() ? View.VISIBLE : View.GONE);
         browserAddress.setText(app.viewerUrl());
         devices.removeAllViews();
-        int total = app.devices.size() + (app.cast == null ? 0 : app.cast.routes.size());
-        count.setText(total == 0 ? "En tu red" : total + " receptores");
+        java.util.List<NearbyDevice> nearby = app.visibleNearby();
+        int total = app.devices.size() + nearby.size() + (app.cast == null ? 0 : app.cast.routes.size());
+        count.setText(total == 0 ? "Cerca de ti" : total + " receptores");
         if (app.cast != null) for (var route : app.cast.routes) {
             deviceRow(route.getName(), "Google Cast · vídeo e imágenes", app.target == AppController.Target.CAST && app.targetName.equals(route.getName()), () -> app.chooseCast(route));
         }
         for (DlnaDevice device : app.devices) deviceRow(device.name.isEmpty() ? "Receptor DLNA" : device.name,
-                "DLNA · " + device.host + (device.playable() ? "" : " · solo detectado"), app.target == AppController.Target.DLNA && app.dlna == device, () -> app.chooseDlna(device));
+                "DLNA · " + device.host + (device.via.isEmpty() ? "" : " · " + device.via) + (device.playable() ? "" : " · solo detectado"), app.target == AppController.Target.DLNA && app.dlna == device, () -> app.chooseDlna(device));
+        for (NearbyDevice device : nearby) deviceRow(device.name, device.sourceLabel() + " · " + device.detail + " · " + nearbyHint(device),
+                false, () -> chooseNearby(device));
         if (total == 0) {
-            TextView empty = text(app.scanning ? "Buscando pantallas en tu red…" : "Todavía no hay TVs compatibles en la lista.\nEnciende la TV y comprueba su conexión.", 14, MUTED);
+            TextView empty = text(app.scanning || app.nearbyScanning ? "Buscando pantallas en tus redes y cerca del móvil…" : "Todavía no hay TVs en la lista.\nEnciende la TV, activa Bluetooth/Wi-Fi Direct en ella o prueba otra red.", 14, MUTED);
             empty.setPadding(dp(12),dp(20),dp(12),dp(20)); devices.addView(empty);
         }
         String castNote = app.cast != null && !app.cast.unavailable.isEmpty() ? "\n" + app.cast.unavailable : "";
         scanNote.setText(app.scanNote + castNote);
+        boolean p2p = app.wifiDirectConnected();
+        p2pState.setVisibility(p2p ? View.VISIBLE : View.GONE); p2pDisconnect.setVisibility(p2p ? View.VISIBLE : View.GONE);
+        p2pState.setText("●  Wi-Fi Direct conectado con " + app.wifiDirectName());
+        boolean hotspot = app.hotspotActive();
+        hotspotButton.setText(hotspot ? "Apagar la red del móvil" : "Crear red del móvil para la TV");
+        hotspotState.setVisibility(hotspot && !app.hotspotInfo.isEmpty() ? View.VISIBLE : View.GONE); hotspotState.setText(app.hotspotInfo);
         rendering = false;
     }
 
@@ -190,9 +208,9 @@ public final class MainActivity extends AppCompatActivity {
         } else app.send();
     }
     private void manualIp() {
-        EditText input = new EditText(this); input.setHint("192.168.1.50"); input.setTextColor(TEXT); input.setHintTextColor(MUTED);
-        input.setInputType(InputType.TYPE_CLASS_PHONE); input.setPadding(dp(24),dp(16),dp(24),dp(16));
-        new AlertDialog.Builder(this).setTitle("Buscar DLNA por IP").setMessage("Introduce la IP que muestra tu TV en sus ajustes de red. Se consultará solo ese dispositivo.")
+        EditText input = new EditText(this); input.setHint("192.168.1.50 · 192.168.2.0/24"); input.setTextColor(TEXT); input.setHintTextColor(MUTED);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS); input.setPadding(dp(24),dp(16),dp(24),dp(16));
+        new AlertDialog.Builder(this).setTitle("Buscar por IP o en otra red").setMessage("Escribe la IP que muestra tu TV en sus ajustes de red, aunque esté en otra red de tu casa u oficina (otra subred, otra banda, Ethernet en otra VLAN). También puedes buscar en una red completa (192.168.2.0/24) o un rango (192.168.2.10-60).\n\nEl router debe permitir el tráfico entre ambas redes.")
                 .setView(input).setPositiveButton("Buscar",(dialog,which) -> app.scan(input.getText().toString().trim())).setNegativeButton("Cancelar",null).show();
     }
     private void mirroring() {
@@ -207,10 +225,62 @@ public final class MainActivity extends AppCompatActivity {
                 "GOOGLE CAST\nChromecast y TVs con Google Cast activado. El móvil necesita Google Play Services. La primera conexión puede necesitar Internet.\n\n" +
                 "DLNA\nTVs que anuncien MediaRenderer y controles de reproducción. En algunas Samsung, LG, Sony y otras marcas hay que activar compartir contenido o permitir el móvil en la TV.\n\n" +
                 "NAVEGADOR\nAbre el enlace local en el navegador de la TV. El vídeo arranca sin sonido; actívalo con el mando. Algunas TVs no tienen navegador compatible.\n\n" +
-                "SI NO APARECE\nUsa la misma red local; la TV puede estar por Ethernet. Evita Wi-Fi de invitados y aislamiento de clientes. Revisa VPN y permisos de la TV. Buscar por IP solo prueba DLNA.\n\n" +
+                "OTRA RED\nSi la TV está en otra subred enrutada, usa Buscar por IP o en otra red. Se prueba SSDP directo y las direcciones DLNA habituales de cada marca.\n\n" +
+                "SIN RED COMÚN\nWi-Fi Direct conecta el móvil directamente con la TV (acepta en la TV). Bluetooth detecta la TV y POLTERHEIST busca la misma TV por Wi-Fi Direct: Bluetooth no transmite vídeo. También puedes crear la red del móvil y conectar la TV a ella.\n\n" +
+                "SI NO APARECE\nEvita Wi-Fi de invitados y aislamiento de clientes. Revisa VPN y permisos de la TV. Activa en la TV Wi-Fi Direct, Screen Mirroring o Bluetooth.\n\n" +
                 "FORMATOS\nLas imágenes se preparan como JPEG. MP4 con vídeo H.264 y audio AAC suele ofrecer mayor compatibilidad; los vídeos no se convierten automáticamente.\n\n" +
-                "LÍMITES\nUna TV por sesión, sin sincronización entre pantallas. Bluetooth no transmite vídeo de forma universal. TVs sin receptor, navegador o duplicación compatible necesitan un receptor externo, por ejemplo por HDMI. Mantén el móvil conectado: esta versión no instala contenido en la TV.")
+                "LÍMITES\nUna TV por sesión, sin sincronización entre pantallas. Bluetooth solo sirve para detectar y emparejar. TVs sin receptor, navegador o duplicación compatible necesitan un receptor externo, por ejemplo por HDMI. Mantén el móvil conectado: esta versión no instala contenido en la TV.")
                 .setPositiveButton("Entendido",null).show();
+    }
+
+    /** Asks once for nearby-device permissions (Wi-Fi Direct, Bluetooth, hotspot) and then runs the action. */
+    private void withNearby(boolean always, Runnable action) {
+        String[] missing = NearbyPermissions.missing(this);
+        boolean asked = getPreferences(MODE_PRIVATE).getBoolean("nearby_asked", false);
+        if (missing.length == 0 || (asked && !always)) { action.run(); return; }
+        getPreferences(MODE_PRIVATE).edit().putBoolean("nearby_asked", true).apply();
+        pendingNearby = action;
+        nearbyPermission.launch(missing);
+    }
+    private String nearbyHint(NearbyDevice device) {
+        switch (device.source) {
+            case WIFI_DIRECT: return "toca para conectar directo";
+            case BLUETOOTH: return "toca para conectar por Wi-Fi Direct";
+            default: return "detectada, sin DLNA";
+        }
+    }
+    private void chooseNearby(NearbyDevice device) {
+        if (!app.canChangeTarget()) return;
+        if (device.source == NearbyDevice.Source.WIFI_DIRECT) {
+            new AlertDialog.Builder(this).setTitle("Conectar por Wi-Fi Direct").setMessage(
+                    "Se conectará el móvil directamente con «" + device.name + "», sin router. La TV puede pedir que aceptes la conexión.\n\n" +
+                    "Después aparecerá como DLNA si la TV lo ofrece por Wi-Fi Direct; si no, usa el navegador de la TV. En algunos móviles el Wi-Fi normal se pausa mientras dura.")
+                    .setPositiveButton("Conectar", (d, w) -> withNearby(true, () -> app.connectWifiDirect((android.net.wifi.p2p.WifiP2pDevice) device.handle)))
+                    .setNegativeButton("Cancelar", null).show();
+        } else if (device.source == NearbyDevice.Source.BLUETOOTH) {
+            new AlertDialog.Builder(this).setTitle("TV detectada por Bluetooth").setMessage(
+                    "Bluetooth no puede transmitir imagen ni vídeo. POLTERHEIST buscará «" + device.name + "» por Wi-Fi Direct y se conectará por ahí.\n\n" +
+                    "Si no la encuentra, crea la red del móvil y conecta la TV a ella, o usa duplicar pantalla.")
+                    .setPositiveButton("Conectar por Wi-Fi Direct", (d, w) -> withNearby(true, () -> app.bridgeBluetooth(device)))
+                    .setNeutralButton("Emparejar Bluetooth", (d, w) -> withNearby(true, () -> app.pairBluetooth(device)))
+                    .setNegativeButton("Cancelar", null).show();
+        } else {
+            new AlertDialog.Builder(this).setTitle("TV detectada (" + device.detail + ")").setMessage(
+                    "La TV anuncia " + device.detail + " pero no ha respondido como DLNA. Si es Google Cast aparecerá como tal cuando Play Services la reconozca.\n\n" +
+                    "Puedes volver a comprobar DLNA o usar su navegador.")
+                    .setPositiveButton("Comprobar DLNA", (d, w) -> app.reprobe(device))
+                    .setNeutralButton("Usar navegador", (d, w) -> app.chooseBrowser())
+                    .setNegativeButton("Cancelar", null).show();
+        }
+    }
+    private void hotspot() {
+        if (app.hotspotActive()) { app.stopHotspot(); return; }
+        new AlertDialog.Builder(this).setTitle("Crear red del móvil").setMessage(
+                "El móvil creará una red Wi-Fi local, sin Internet, para conectar una TV que esté en otra red o sin red.\n\n" +
+                "1. Conecta la TV a la red que se mostrará (nombre y clave).\n2. Pulsa Buscar TVs o usa el navegador de la TV.\n\n" +
+                "En algunos móviles el Wi-Fi normal se desconecta mientras la red está activa.")
+                .setPositiveButton("Crear red", (d, w) -> withNearby(true, app::startHotspot))
+                .setNegativeButton("Cancelar", null).show();
     }
 
     private LinearLayout card(String number,String title) {

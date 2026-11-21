@@ -15,12 +15,12 @@ public final class ShareService extends Service {
     private final ConnectivityManager.NetworkCallback networks = new ConnectivityManager.NetworkCallback() {
         @Override public void onLost(Network network) {
             controller.main.post(() -> {
-                if (controller.network != null && controller.network.network.equals(network)) controller.networkLost();
+                if (controller.network != null && network.equals(controller.network.network)) controller.networkLost();
             });
         }
         @Override public void onLinkPropertiesChanged(Network network, LinkProperties properties) {
             controller.main.post(() -> {
-                if (controller.network != null && controller.network.network.equals(network) &&
+                if (controller.network != null && network.equals(controller.network.network) &&
                     properties.getLinkAddresses().stream().noneMatch(a -> a.getAddress().equals(controller.network.address))) controller.networkLost();
             });
         }

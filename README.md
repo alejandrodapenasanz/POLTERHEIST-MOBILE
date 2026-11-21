@@ -7,7 +7,7 @@ Primera app Android de POLTERHEIST para mostrar una imagen o un vídeo del móvi
 La compilación de desarrollo está en `artifacts/POLTERHEIST-Mobile-0.1.0-debug.apk` cuando se ha ejecutado el empaquetado local. La salida original de Gradle es `app/build/outputs/apk/debug/app-debug.apk`.
 
 1. Copia la APK al móvil, ábrela y permite instalar desde esa aplicación cuando Android lo solicite. Es una APK de desarrollo firmada con la clave debug, no una publicación de Play Store.
-2. Conecta el móvil y la TV a la misma red local. La TV puede usar Ethernet.
+2. Lo más sencillo es conectar el móvil y la TV a la misma red local (la TV puede usar Ethernet). Si no es posible, mira [Detectar TVs fuera de tu red](#detectar-tvs-fuera-de-tu-red).
 3. Abre POLTERHEIST y elige una imagen o un vídeo con el selector de Android.
 4. Pulsa **Buscar TVs**, selecciona un receptor y pulsa **Enviar a la TV**. En Cast, espera a que la conexión termine. Acepta en la TV cualquier solicitud que muestre su sistema.
 5. Usa **Pausar**, **Reanudar** y **Detener**, o detén el envío desde la notificación.
@@ -21,11 +21,24 @@ La búsqueda no inicia reproducción. Seleccionar Cast abre su aplicación recep
 | Google Cast | Receptor de vídeo Google Cast activado; móvil con Google Play Services | Descubrimiento oficial, conexión, imagen/vídeo, pausa, reanudación, repetición y cierre |
 | DLNA/UPnP | Anunciar `MediaRenderer` con `AVTransport`, `SetAVTransportURI`, `Play` y `Stop` | SSDP en Wi-Fi/Ethernet, búsqueda dirigida por IPv4, imagen/vídeo y controles anunciados por la TV |
 | Navegador | Navegador de TV con HTTP local, JavaScript y soporte del contenido | Enlace local que se escribe en la TV; imagen/vídeo, reproducción, pausa, bucle y parada desde el móvil |
+| Otra subred | IP enrutable desde la red del móvil y DLNA en la TV | SSDP unicast a una IP, red /22–/32 o rango + URLs DLNA habituales (Samsung, Sony, genéricas) |
+| Wi-Fi Direct | TV con Wi-Fi Direct / Screen Mirroring activado | Descubrimiento y conexión directa sin router; después DLNA o navegador sobre el enlace directo |
+| Bluetooth | TV visible por Bluetooth (clásico o BLE) | Solo detección y emparejado; puente automático a Wi-Fi Direct con la misma TV |
+| mDNS | TV que anuncie Google Cast, AirPlay, Android TV o Fire TV | Detección y sondeo DLNA directo a su IP |
+| Red del móvil | TV con Wi-Fi que pueda unirse a otra red | El móvil crea una red local sin Internet (LocalOnlyHotspot); la TV se une y se usa DLNA o navegador |
 | Duplicación del sistema | Función compatible en el móvil y en la TV | Acceso a ajustes de Android y vista local a pantalla completa; la conexión y proyección las realiza el sistema |
 
 **No existe compatibilidad garantizada con todos los modelos del mercado.** La marca por sí sola no demuestra compatibilidad: importa el receptor que tenga activo cada modelo. Samsung, LG y otras marcas pueden ofrecer DLNA o navegador, según modelo y configuración. Algunas TVs Android no tienen Cast habilitado. Se pueden listar dos entradas de una misma TV si anuncia Cast y DLNA; son dos métodos distintos.
 
-Esta versión no implementa AirPlay, control específico de Roku/Fire TV/webOS/Tizen, instalación de apps en la TV, Bluetooth para vídeo ni un emisor Miracast propio. Bluetooth no es un sustituto general de Cast/DLNA. Un televisor sin una vía compatible requiere añadir un receptor o usar una conexión externa, por ejemplo HDMI. Abrir los ajustes de duplicación no garantiza que el móvil disponga de Miracast.
+Esta versión no implementa envío AirPlay, control específico de Roku/Fire TV/webOS/Tizen, instalación de apps en la TV, Bluetooth para vídeo ni un emisor Miracast propio (AirPlay/Fire TV solo se usan para detectar la TV). Bluetooth no es un sustituto general de Cast/DLNA. Un televisor sin una vía compatible requiere añadir un receptor o usar una conexión externa, por ejemplo HDMI. Abrir los ajustes de duplicación no garantiza que el móvil disponga de Miracast.
+
+## Detectar TVs fuera de tu red
+
+- **Buscar TVs** busca a la vez por SSDP en todas las interfaces locales, mDNS, Wi-Fi Direct y Bluetooth (estos dos con permiso de dispositivos cercanos).
+- **Buscar por IP o en otra red** acepta `192.168.2.40`, `192.168.2.0/24` o `192.168.2.10-60`.
+- **Wi-Fi Direct**: toca la TV, acepta en la TV y espera. Si la TV ofrece DLNA por el enlace directo aparecerá como DLNA; si no, usa el navegador de la TV (el enlace usa la IP Wi-Fi Direct).
+- **Bluetooth**: solo detecta. Al tocarla se busca la misma TV (por nombre) por Wi-Fi Direct y se conecta. También permite emparejar.
+- **Crear red del móvil**: se muestra nombre y clave; conecta la TV a esa red y pulsa Buscar TVs o usa el navegador.
 
 ## Navegador de la TV
 
@@ -35,7 +48,7 @@ El vídeo arranca silenciado por las restricciones de autoplay del navegador. Us
 
 ## Archivos y red
 
-- El selector solo concede acceso al archivo elegido; no se solicita acceso general a tu galería, ubicación o Bluetooth. Se prepara una copia temporal privada en el móvil.
+- El selector solo concede acceso al archivo elegido; no se solicita acceso general a tu galería. Los permisos de dispositivos cercanos (Wi-Fi Direct/Bluetooth; ubicación en Android 8–12) se piden solo para buscar fuera de tu red y son opcionales. Se prepara una copia temporal privada en el móvil.
 - Imágenes: hasta 50 MiB y 100 megapíxeles de entrada, normalizadas a JPEG, orientación EXIF, transparencia sobre negro y lado máximo 1920 px. Los formatos de entrada dependen del decodificador de Android.
 - Para Cast, una imagen se convierte localmente en un clip H.264 de 1280×720, dos segundos, repetido. Requiere un codificador H.264 con entrada YUV flexible; si no está disponible se indica el error y se puede elegir otra vía. El comportamiento de la transición del bucle depende del receptor.
 - Vídeos: hasta 1 GiB, con pista de vídeo reconocida por Android. **No hay transcodificación automática de vídeos**. MP4/H.264/AAC es la opción de mayor compatibilidad habitual. HEVC, MKV, HDR, resoluciones altas y otros formatos dependen del televisor.
@@ -44,7 +57,8 @@ El vídeo arranca silenciado por las restricciones de autoplay del navegador. Us
 - El servicio en primer plano y su notificación mantienen el envío activo al salir de la pantalla o bloquear el móvil, sujeto a las restricciones de batería del fabricante. Detener cierra el servidor. Un receptor desconectado puede conservar datos que ya hubiera cargado.
 - **El móvil debe permanecer conectado durante la reproducción.** No es el modo de payload autónomo del proyecto de escritorio: no se instala ni guarda un reproductor permanente en la TV.
 - No se requiere Internet para DLNA o navegador. Google Cast/Play Services y la carga inicial de su receptor pueden necesitarlo.
-- El descubrimiento se limita a IPv4 local. No se exploran subredes, puertos ni dispositivos Bluetooth. La búsqueda por IP envía SSDP unicast solo a esa IP; algunas TVs no responden a ese método.
+- El descubrimiento usa IPv4 privada. La búsqueda automática cubre Wi-Fi, Ethernet, Wi-Fi Direct y la red del móvil; otras subredes solo se exploran cuando el usuario escribe una IP, red o rango privado (máximo 1024 direcciones). Para una IP concreta se prueban además URLs DLNA habituales.
+- Para otra subred, el router debe enrutar tráfico entre ambas redes y la TV debe poder abrir la IP del móvil (no funciona a través de NAT ni con aislamiento de clientes).
 
 Si no aparece una TV, enciéndela, activa compartir contenido/Cast y revisa la lista de dispositivos permitidos en sus ajustes. Evita Wi-Fi de invitados, aislamiento de clientes y VPN que bloqueen la LAN. Dos bandas Wi-Fi diferentes funcionan si el router las integra en la misma LAN. El enlace de navegador sirve como alternativa cuando el router bloquea el descubrimiento multicast pero permite HTTP entre dispositivos.
 
